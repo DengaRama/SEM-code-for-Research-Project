@@ -1,0 +1,315 @@
+---
+title: "Denga Ramathuba EM and SEM Algorithm"
+output: html_notebook
+name: "Denga Ramathuba"
+Student no. : "u19047802"
+---
+This code is for Denga Ramathuba's research project : "Estimating Gaussian Mixture Models using the Stochastic version of the EM algorithm" 
+
+Section 4: SEM Estimates for the Same Means but different Variances
+
+```{r}
+#Example 4: SEM Estimates for the Same Means but Different Variances
+
+## Import the rmultinom function
+library(stats)
+
+#Set the Seed Number
+set.seed(1456)
+
+## Initialize the parameters
+w = 0.3
+mu1 =0
+mu2 = 0
+sigma2_1 = 1
+sigma2_2 = 2
+
+n = 200
+K = 2
+s = 0
+sw = FALSE
+LL = -Inf
+LL.out = NULL
+epsilon = 10^(-5)
+
+
+# Define the Gaussian Mixture Model
+z <- sample(1:2, n, replace = TRUE, prob = c(w, 1 - w))
+y=ifelse(z==1,rnorm(n, mu1,sqrt(sigma2_1)),rnorm(n,mu2, sqrt(sigma2_2)))
+
+## Checking convergence of the algorithm
+while (s<=336) {
+  
+ gik = array(0, dim=c(n,K))  ##Responsibilities matrix
+# Calculate responsibilities for each component K for each observation
+for (i in 1:n) {
+  gik[i, 1] <- (w * dnorm(y[i], mu1, sqrt(sigma2_1)))
+  gik[i, 2] <- ((1 - w) * dnorm(y[i], mu2, sqrt(sigma2_2)))
+}
+
+# Normalize the responsibilities for each observation
+for (i in 1:n) {
+  gik[i,] <- gik[i,] / sum(gik[i,])
+}
+
+ #Simulate the latent variables matrix
+Zik <- matrix(0, n, K)
+
+  for (i in 1:n) {
+    Zik[i,] <- rmultinom(1, 1, prob = gik[i,] )
+  }
+
+  ## Maximization step
+  w1 = sum(Zik[,1]) / n
+  
+  mu11 = mu22 = 0
+  for (i in 1:n) {
+    mu11 = mu11 + Zik[i, 1] * y[i]
+    mu22 = mu22 + Zik[i, 2] * y[i]
+  }
+   mu11 = mu11/sum(Zik[, 1])
+   mu22 = mu22/sum(Zik[, 2])
+   
+  sigma2_11 = sigma2_22 = 0
+  for (i in 1:n) {
+    sigma2_11 = sigma2_11 + Zik[i, 1]*(y[i] - mu11)^2
+    sigma2_22 = sigma2_22 + Zik[i, 2]* (y[i] - mu22)^2
+  }
+  
+  sigma2_11 = sigma2_11/ sum(Zik[, 1])
+  sigma2_22 = sigma2_22/sum(Zik[, 2])
+  
+  sigma_1 = sqrt(sigma2_11)
+  sigma_2 = sqrt(sigma2_22)
+  
+  LLn = 0
+  for (i in 1:n) {
+    LLn = LLn + log(w1 * dnorm(y[i], mu11, sigma_1) + (1 - w1) * dnorm(y[i], mu22, sigma_2))
+  }
+  
+  ## Check if LL or LLn is NA
+  if (is.na(LL) || is.na(LLn)) {
+    break
+  }
+
+  if (!is.na(LL) && !is.na(LLn) && abs(LLn - LL) < epsilon) {
+  sw = TRUE
+}
+  if (abs(LLn - LL) < epsilon) {
+    sw = TRUE
+  }
+    ## Check if LL and LLn are not NA before comparing
+  if (!is.na(LL) && !is.na(LLn) && abs(LLn - LL) < epsilon) {
+    sw = TRUE
+  }
+  LL = LLn
+  LL.out = c(LL.out, LL)
+  s = s + 1
+  
+mix.prop=c(w1,1-w1);mix.mean=c(mu11,mu22);mix.sigma2=c(sigma2_11,sigma2_22)
+}
+
+## Output the parameter estimates and plot the likelihood
+round(mix.prop, 4)
+round(mix.mean, 4)
+round(mix.sigma2, 4)
+
+s
+LL
+
+```
+
+Section 4: EM Estimates to compare with SEM Estimates
+```{r}
+
+#Example 4: EM estimates of the Same Means and Different Variances
+
+# Load required libraries
+library(mclust)
+library(MASS)
+library(mixtools)
+
+
+set.seed(1456)
+n <- 200
+prop <- 0.3
+
+# Simulate data from a Gaussian mixture model
+num_components <- 2
+mixing_proportions <- c(0.3, 0.7)  # Proportions of each component
+component_means <- c(0, 0)        # Means of each component
+component_variances <- c(1, 2)     # Variances of each component
+
+# Simulate data from the mixture model
+z <- sample(1:num_components, n, replace = TRUE, prob = mixing_proportions)
+x <- numeric(n)
+
+for (i in 1:n) {
+  if (z[i] == 1) {
+    x[i] <- rnorm(1, component_means[1], sqrt(component_variances[1]))
+  } else {
+    x[i] <- rnorm(1, component_means[2], sqrt(component_variances[2]))
+  }
+}
+
+# Fit Gaussian Mixture Model using the Mclust function
+fit1 <- tryCatch(Mclust(x, G = 2, modelNames = "V"), error = function(e) NULL)
+
+#The number of iterations is given as 
+fit2<-normalmixEM(x)
+
+
+# Check if the model fitted successfully
+if (is.null(fit1)) {
+  print("Model fitting failed. Try using different initialization or adjust parameters.")
+} else {
+  # To get the parameters of the fitted model:
+  estimated_means <- fit1$parameters$mean
+  estimated_variances <- fit1$parameters$variance
+  estimated_proportions <- fit1$parameters$pro
+
+  
+  # Print the estimated parameters
+  print(estimated_means)
+  print(estimated_variances)
+  print(estimated_proportions)
+  
+}
+
+#Get the log likelihood
+  LLn = 0
+  for (i in 1:n) {
+    LLn = LLn + log(estimated_proportions[1] * dnorm(x[i], estimated_means[1], sqrt(2.3175947) ) + (1 - estimated_proportions[2]) * dnorm(x[i], estimated_means[2], sqrt(0.8817713)))
+  }
+  
+
+```
+
+
+
+Section 3.3: Examples of the EM Algorithm
+```{r}
+#Example 1:Non-overlapping Mixture Components
+# Load required libraries
+library(mclust)
+library(MASS)
+library(ggplot2)
+
+
+set.seed(1456)
+n <- 100
+prop <- 0.3
+
+# Simulate data from a Gaussian mixture model
+num_components <- 2
+mixing_proportions <- c(0.3, 0.7)  # Proportions of each component
+component_means <- c(0, 10)        # Means of each component
+component_variances <- c(1, 2)     # Variances of each component
+
+# Simulate data from the mixture model
+z <- sample(1:num_components, n, replace = TRUE, prob = mixing_proportions)
+x <- numeric(n)
+
+for (i in 1:n) {
+  if (z[i] == 1) {
+    x[i] <- rnorm(1, component_means[1], sqrt(component_variances[1]))
+  } else {
+    x[i] <- rnorm(1, component_means[2], sqrt(component_variances[2]))
+  }
+}
+
+# Fit Gaussian Mixture Model using the Mclust function
+fit1 <- tryCatch(Mclust(x, G = 2, modelNames = "V"), error = function(e) NULL)
+
+# Check if the model fitted successfully
+if (is.null(fit1)) {
+  print("Model fitting failed. Try using different initialization or adjust parameters.")
+} else {
+  # To get the parameters of the fitted model:
+  estimated_means <- fit1$parameters$mean
+  estimated_variances <- fit1$parameters$variance
+  estimated_proportions <- fit1$parameters$pro
+
+  # Print the estimated parameters
+  print(estimated_means)
+  print(estimated_variances)
+  print(estimated_proportions)
+  
+  # Plot the Fitted GMM along with the true components
+  ggplot(data.frame(x = x), aes(x = x)) +
+    geom_density(aes(color = "Fitted GMM"), fill = NA) +
+    geom_density(data = data.frame(x = c(component_means[1], component_means[2])),
+                 aes(x = x, color = "True Components"), fill = NA, linetype = "dashed") +
+    labs(x = "Values", color = "Distribution") +
+    theme_minimal()
+  
+}
+```
+
+
+
+
+
+```{r}
+#Example 3 : Missing Data is too Large
+
+library(mclust)
+library(mixtools)
+
+set.seed(1456)
+n <- 100
+prop <- 0.3
+
+# Simulate data from a Gaussian mixture model
+num_components <- 2
+mixing_proportions <- c(0.3, 0.7)  # Proportions of each component
+component_means <- c(0, 10)        # Means of each component
+component_variances <- c(1, 2)     # Variances of each component
+
+# Simulate data from the mixture model
+z <- sample(1:num_components, n, replace = TRUE, prob = mixing_proportions)
+x <- numeric(n)
+
+for (i in 1:n) {
+  if (z[i] == 1) {
+    x[i] <- rnorm(1, component_means[1], sqrt(component_variances[1]))
+  } else {
+    x[i] <- rnorm(1, component_means[2], sqrt(component_variances[2]))
+  }
+}
+
+hist(x)
+
+# Fit Gaussian Mixture Models with different numbers of components
+k_values <- c(3, 4, 5)
+for (k in k_values) {
+  cat(paste("Fitting GMM with", k, "components\n"))
+  start_time <- Sys.time()
+  num_iter = normalmixEM(x)
+
+  # Fit the GMM using Mclust
+  fit <- Mclust(x, G = k)
+  
+  # Print the results
+  cat(paste("Number of iterations:", fit$G))
+  
+  end_time <- Sys.time()
+  elapsed_time <- difftime(end_time, start_time, units = "secs")
+  
+  cat(paste("Elapsed time:", elapsed_time, "seconds\n"))
+  
+  # Print estimated parameters
+  cat("Estimated Means:\n")
+  print(fit$parameters$mean)
+  
+  cat("Estimated Variances:\n")
+  print(fit$parameters$variance)
+  
+  cat("Estimated Proportions:\n")
+  print(fit$parameters$pro)
+}
+```
+
+
+
+
